@@ -14,7 +14,7 @@ def open_settings(app):
         import tkinter as tk
         from tkinter import ttk, messagebox
 
-        from config import T, save_config, log, currency_sym
+        from src.config import T, save_config, log, currency_sym
 
         lang = app.lang
 
@@ -24,7 +24,7 @@ def open_settings(app):
             if getattr(sys, 'frozen', False):
                 icon_path = os.path.join(sys._MEIPASS, 'app_icon.ico')
             else:
-                icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                          'app_icon.ico')
             if os.path.isfile(icon_path):
                 root.iconbitmap(icon_path)
@@ -103,7 +103,7 @@ def open_settings(app):
         lang_combo.pack(anchor="w", pady=(0, 12))
 
         # --- Auto-Start ---
-        from app_state import get_auto_start_state
+        from src.app_state import get_auto_start_state
         auto_start_var = tk.BooleanVar(
             value=app.config.get("auto_start", False) or get_auto_start_state())
         ttk.Checkbutton(frame, text=T("auto_start_label", lang),
@@ -135,7 +135,7 @@ def open_settings(app):
 
         def on_save():
             # Lazy import to avoid circular dependency with tray_app
-            from tray_app import do_balance_check
+            from src.tray_app import do_balance_check
 
             key = api_var.get().strip()
             if not key:
@@ -149,7 +149,7 @@ def open_settings(app):
             app.config["preferred_currency"] = currency_var.get()
             app.config["auto_start"] = auto_start_var.get()
             # Apply auto-start immediately
-            from app_state import set_auto_start
+            from src.app_state import set_auto_start
             set_auto_start(app.config["auto_start"])
             save_config(app.config)
             app.cancel_timer()

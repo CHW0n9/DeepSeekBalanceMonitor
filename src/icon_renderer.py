@@ -3,7 +3,7 @@ Tray icon image generation - rounded-rectangle with bold balance label.
 """
 from PIL import Image, ImageDraw, ImageFont
 
-from config import log
+from src.config import log
 
 _ICON_GREEN  = (55, 135, 75, 255)
 _ICON_RED    = (185, 70, 60, 255)

@@ -2,6 +2,9 @@
 chcp 65001 >nul
 title Building DeepSeek Balance Monitor .exe
 
+:: Always run from project root (one level above scripts/)
+cd /d "%~dp0.."
+
 echo ==============================================
 echo   Building DeepSeek Balance Monitor .exe
 echo ==============================================
@@ -36,7 +39,7 @@ echo.
 
 :: Generate icon
 echo [*] Generating app icon...
-python generate_icon.py
+python scripts\generate_icon.py
 echo.
 
 :: Build the single-file executable
@@ -49,7 +52,7 @@ pyinstaller ^
     --noconsole ^
     --name "DeepSeekBalanceMonitor" ^
     --icon app_icon.ico ^
-    --paths . ^
+    --paths src ^
     --add-data "app_icon.ico;." ^
     --version-file version_info.txt ^
     --clean ^

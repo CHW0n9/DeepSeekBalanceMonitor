@@ -7,10 +7,10 @@ from datetime import datetime
 
 import pystray
 
-from config import T, log, CONFIG_DIR, APP_NAME, APP_ID, currency_sym
-from api_client import fetch_balance
-from icon_renderer import create_icon_image
-from app_state import AppState
+from src.config import T, log, CONFIG_DIR, APP_NAME, APP_ID, currency_sym
+from src.api_client import fetch_balance
+from src.icon_renderer import create_icon_image
+from src.app_state import AppState
 
 
 # ─── Balance Check ──────────────────────────────────────────────────
@@ -135,7 +135,7 @@ def on_settings(icon, item):
     if app is None:
         return
     try:
-        from settings_dialog import open_settings
+        from src.settings_dialog import open_settings
         open_settings(app)
     except Exception as e:
         log(f"Settings error: {e}")
@@ -175,7 +175,7 @@ def main():
     if not app.config.get("api_key", "").strip():
         log("No API key — opening settings")
         try:
-            from settings_dialog import open_settings
+            from src.settings_dialog import open_settings
             open_settings(app)
             app = AppState()
         except Exception as e:

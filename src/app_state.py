@@ -5,7 +5,7 @@ import sys
 import threading
 from datetime import datetime
 
-from config import load_config, T, currency_sym, log, APP_ID
+from src.config import load_config, T, currency_sym, log, APP_ID
 
 
 class AppState:

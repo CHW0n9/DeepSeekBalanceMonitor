@@ -40,7 +40,7 @@ A Windows system tray application that periodically queries the DeepSeek API for
 pip install -r requirements.txt
 
 # 2. Test your API key
-python test_api.py YOUR_DEEPSEEK_API_KEY
+python scripts\test_api.py YOUR_DEEPSEEK_API_KEY
 
 # 3. Run the app
 python main.py
@@ -49,7 +49,7 @@ python main.py
 **Verify Your API Key**
 
 ```bash
-python test_api.py sk-xxxxxxxxxxxxxxxx
+python scripts\test_api.py sk-xxxxxxxxxxxxxxxx
 ```
 
 Prints your balance directly in the terminal. If it works here, it will work in the tray app.
@@ -61,7 +61,7 @@ Prints your balance directly in the terminal. If it works here, it will work in 
 pip install pyinstaller
 
 # Run the build script
-build_exe.bat
+scripts\build_exe.bat
 ```
 
 The build script:
@@ -74,20 +74,23 @@ The build script:
 
 ```
 DeepSeekBalance/
-├── config.py             # Constants, i18n, logging, config I/O, DPI
-├── api_client.py         # fetch_balance() — DeepSeek API call
-├── icon_renderer.py      # create_icon_image() — dynamic tray icon
-├── app_state.py          # AppState class + registry helpers
-├── settings_dialog.py    # open_settings() — tkinter dialog
-├── tray_app.py           # Check loop, notifications, menu, main()
-├── main.py               # Thin entry point
-├── generate_icon.py      # Static multi-resolution .ico generator
-├── test_api.py           # Quick API key validation
-├── build_exe.bat         # One-click build + launch
-├── version_info.txt      # PyInstaller version resource
-├── setup.bat             # pip install dependencies
-├── run_silent.vbs        # Silent launcher
-├── requirements.txt      # pystray, Pillow, requests
+├── src/
+│   ├── __init__.py
+│   ├── config.py             # Constants, i18n, logging, config I/O, DPI
+│   ├── api_client.py         # fetch_balance() — DeepSeek API call
+│   ├── icon_renderer.py      # create_icon_image() — dynamic tray icon
+│   ├── app_state.py          # AppState class + registry helpers
+│   ├── settings_dialog.py    # open_settings() — tkinter dialog
+│   └── tray_app.py           # Check loop, notifications, menu, main()
+├── main.py                   # Thin entry point
+├── scripts/
+│   ├── generate_icon.py      # Static multi-resolution .ico generator
+│   ├── test_api.py           # Quick API key validation
+│   ├── build_exe.bat         # One-click build + launch
+│   ├── setup.bat             # pip install dependencies
+│   └── run_silent.vbs        # Silent launcher
+├── version_info.txt          # PyInstaller version resource
+├── requirements.txt          # pystray, Pillow, requests
 └── README.md
 ```
 
@@ -165,7 +168,7 @@ MIT
 pip install -r requirements.txt
 
 # 2. 测试 API Key
-python test_api.py 你的DEEPSEEK_API_KEY
+python scripts\test_api.py 你的DEEPSEEK_API_KEY
 
 # 3. 运行
 python main.py
@@ -174,7 +177,7 @@ python main.py
 **验证 API Key**
 
 ```bash
-python test_api.py sk-xxxxxxxxxxxxxxxx
+python scripts\test_api.py sk-xxxxxxxxxxxxxxxx
 ```
 
 终端直接打印余额。这里能通则托盘应用也能通。
@@ -186,7 +189,7 @@ python test_api.py sk-xxxxxxxxxxxxxxxx
 pip install pyinstaller
 
 # 运行构建脚本
-build_exe.bat
+scripts\build_exe.bat
 ```
 
 构建流程：
@@ -199,20 +202,23 @@ build_exe.bat
 
 ```
 DeepSeekBalance/
-├── config.py             # 常量、双语字典、日志、配置读写、DPI 感知
-├── api_client.py         # fetch_balance() — 单次 API 余额查询
-├── icon_renderer.py      # create_icon_image() — 动态托盘图标渲染
-├── app_state.py          # AppState 类 + 注册表辅助函数
-├── settings_dialog.py    # open_settings() — tkinter 设置对话框
-├── tray_app.py           # 查询循环、通知、菜单回调、main()
-├── main.py               # 薄入口
-├── generate_icon.py      # 静态多分辨率 .ico 生成器
-├── test_api.py           # API Key 快速验证脚本
-├── build_exe.bat         # 一键构建 + 启动
-├── version_info.txt      # PyInstaller 版本资源（通知显示名称）
-├── setup.bat             # pip 安装依赖
-├── run_silent.vbs        # 静默启动脚本
-├── requirements.txt      # pystray, Pillow, requests
+├── src/
+│   ├── __init__.py
+│   ├── config.py             # 常量、双语字典、日志、配置读写、DPI 感知
+│   ├── api_client.py         # fetch_balance() — 单次 API 余额查询
+│   ├── icon_renderer.py      # create_icon_image() — 动态托盘图标渲染
+│   ├── app_state.py          # AppState 类 + 注册表辅助函数
+│   ├── settings_dialog.py    # open_settings() — tkinter 设置对话框
+│   └── tray_app.py           # 查询循环、通知、菜单回调、main()
+├── main.py                   # 薄入口
+├── scripts/
+│   ├── generate_icon.py      # 静态多分辨率 .ico 生成器
+│   ├── test_api.py           # API Key 快速验证脚本
+│   ├── build_exe.bat         # 一键构建 + 启动
+│   ├── setup.bat             # pip 安装依赖
+│   └── run_silent.vbs        # 静默启动脚本
+├── version_info.txt          # PyInstaller 版本资源（通知显示名称）
+├── requirements.txt          # pystray, Pillow, requests
 └── README.md
 ```
 
