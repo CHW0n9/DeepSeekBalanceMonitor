@@ -1,0 +1,210 @@
+"""
+Tray application — balance checking loop, notifications, tray menu, and entry point.
+"""
+import sys
+import threading
+from datetime import datetime
+
+import pystray
+
+from config import T, log, CONFIG_DIR, APP_NAME, APP_ID, currency_sym
+from api_client import fetch_balance
+from icon_renderer import create_icon_image
+from app_state import AppState
+
+
+# ─── Balance Check ──────────────────────────────────────────────────
+
+def do_balance_check(app: AppState):
+    api_key = app.config.get("api_key", "").strip()
+    if not api_key:
+        with app._lock:
+            app.error = T("error_no_key", app.lang)
+            app.balances = {}
+    else:
+        try:
+            data = fetch_balance(api_key)
+            with app._lock:
+                app.balances = data["all_balances"]
+                app.error = None
+                app.last_check = datetime.now()
+            b = app.get_preferred_balance()
+            if b:
+                log(f"Balance OK: {b['total_balance']:.2f} {b['currency']}")
+        except Exception as e:
+            with app._lock:
+                app.error = str(e).split("\n")[0]
+                app.balances = {}
+            log(f"Check failed: {e}")
+
+    if app.icon:
+        app.icon.title = app.balance_tooltip()
+        app.icon.icon = create_icon_image(app)
+
+    if app.is_low_balance():
+        notify_user(app)
+
+    interval_sec = int(app.config.get("interval_minutes", 10)) * 60
+    app.schedule_next_check(lambda: do_balance_check(app), interval_sec)
+
+
+# ─── Low-Balance Notification ───────────────────────────────────────
+
+def notify_user(app: AppState):
+    b = app.get_preferred_balance()
+    if b is None:
+        return
+    lang = app.lang
+    t = app.config.get("threshold_yuan", 1.0)
+    sym = currency_sym(b["currency"])
+    bal_str = f"{sym}{b['total_balance']:,.2f}"
+    thr_str = f"{sym}{t:,.2f}"
+    title = T("low_bal_title", lang)
+    msg = T("low_bal_msg", lang, balance=bal_str, threshold=thr_str)
+    try:
+        app.icon.notify(msg, title=title)
+        log(f"Notification sent: {b['total_balance']:.2f}")
+    except Exception as e:
+        log(f"Notification failed: {e}")
+        alert_file = CONFIG_DIR / "LOW_BALANCE_ALERT.txt"
+        try:
+            with open(alert_file, "w", encoding="utf-8") as f:
+                f.write(f"{title}\n\n{msg}\n")
+        except Exception:
+            pass
+
+
+# ─── Tray Menu Actions ──────────────────────────────────────────────
+
+def on_show_balance(icon, item):
+    app = getattr(icon, "_app", None)
+    if app is None:
+        return
+    lang = app.lang
+    with app._lock:
+        balances = dict(app.balances)
+        err = app.error
+        last = app.last_check
+
+    if err:
+        title = T("bal_error_title", lang)
+        msg = T("bal_error_msg", lang, error=err)
+    elif not balances:
+        title = T("bal_empty_title", lang)
+        msg = T("bal_empty_msg", lang)
+    else:
+        time_str = last.strftime("%Y-%m-%d %H:%M:%S") if last else "—"
+        lines = []
+        for code, b in balances.items():
+            sym = currency_sym(code)
+            lines.append(T("bal_currency_line", lang,
+                           code=code, sym=sym,
+                           total=f"{b['total_balance']:,.2f}",
+                           topped=f"{b['topped_up_balance']:,.2f}",
+                           granted=f"{b['granted_balance']:,.2f}"))
+        msg = "\n".join(lines)
+        if last:
+            msg += f"\n{T('last_check', lang)}: {time_str}"
+
+        pb = app.get_preferred_balance()
+        if pb:
+            title = T("bal_title", lang,
+                      balance=f"{currency_sym(pb['currency'])}{pb['total_balance']:,.2f}")
+        else:
+            first_code = next(iter(balances))
+            title = T("bal_title", lang,
+                      balance=f"{currency_sym(first_code)}{balances[first_code]['total_balance']:,.2f}")
+
+    try:
+        icon.notify(msg, title=title)
+    except Exception as e:
+        log(f"Show-balance notify failed: {e}")
+
+
+def on_check_now(icon, item):
+    app = getattr(icon, "_app", None)
+    if app is None:
+        return
+    app.cancel_timer()
+    threading.Thread(target=do_balance_check, args=(app,), daemon=True).start()
+    log("Manual check triggered")
+
+
+def on_settings(icon, item):
+    app = getattr(icon, "_app", None)
+    if app is None:
+        return
+    try:
+        from settings_dialog import open_settings
+        open_settings(app)
+    except Exception as e:
+        log(f"Settings error: {e}")
+
+
+def on_quit(icon, item):
+    app = getattr(icon, "_app", None)
+    if app is None:
+        icon.stop()
+        return
+    app.running = False
+    app.cancel_timer()
+    log("Shutting down")
+    icon.stop()
+
+
+def make_menu(app: AppState):
+    lang = app.lang
+    return pystray.Menu(
+        pystray.MenuItem(T("view_balance", lang), on_show_balance, default=True),
+        pystray.MenuItem(T("check_now", lang), on_check_now),
+        pystray.MenuItem(T("settings", lang), on_settings),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem(T("quit", lang), on_quit),
+    )
+
+
+# ─── Entry Point ────────────────────────────────────────────────────
+
+def main():
+    log("=" * 50)
+    log(f"{APP_NAME} starting")
+
+    app = AppState()
+
+    # First run — force settings if no API key
+    if not app.config.get("api_key", "").strip():
+        log("No API key — opening settings")
+        try:
+            from settings_dialog import open_settings
+            open_settings(app)
+            app = AppState()
+        except Exception as e:
+            log(f"Settings failed: {e}")
+
+        if not app.config.get("api_key", "").strip():
+            log("No API key provided — exiting")
+            print(T("exit_no_key", app.config.get("language", "zh")))
+            sys.exit(0)
+
+    # Create tray icon
+    icon_img = create_icon_image(app)
+    app.icon = pystray.Icon(
+        APP_ID,
+        icon_img,
+        title=app.balance_tooltip(),
+        menu=make_menu(app),
+    )
+    app.icon._app = app
+
+    # Start first balance check
+    threading.Thread(target=do_balance_check, args=(app,), daemon=True).start()
+    log("First balance check scheduled")
+
+    try:
+        app.icon.run()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        app.running = False
+        app.cancel_timer()
+        log("Exited cleanly")
