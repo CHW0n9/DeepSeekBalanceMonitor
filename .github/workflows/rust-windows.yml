@@ -1,0 +1,43 @@
+name: Rust Windows
+
+on:
+  push:
+    paths:
+      - "rust-windows/**"
+      - ".github/workflows/rust-windows.yml"
+  pull_request:
+    paths:
+      - "rust-windows/**"
+      - ".github/workflows/rust-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: rust-windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust 1.77.2
+        run: |
+          rustup toolchain install 1.77.2 --profile minimal --component rustfmt
+          rustup target add x86_64-pc-windows-msvc --toolchain 1.77.2
+
+      - name: Check formatting
+        run: cargo +1.77.2 fmt --check
+
+      - name: Check Windows target
+        run: cargo +1.77.2 check --target x86_64-pc-windows-msvc --locked
+
+      - name: Build release executable
+        run: cargo +1.77.2 build --release --target x86_64-pc-windows-msvc --locked
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-balance-monitor-windows
+          path: rust-windows/target/x86_64-pc-windows-msvc/release/deepseek-balance-monitor.exe
