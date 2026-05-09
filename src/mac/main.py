@@ -25,7 +25,32 @@ try:
 except ImportError:
     HAS_PYOBJC = False
 
-from src.config import load_config, save_config, T, log
+from src.config import load_config, save_config, T as _T, log
+
+# --- macOS Local Translations ---
+_MAC_T = {
+    "zh": {
+        "topped_up": "充值余额",
+        "granted": "赠送余额",
+        "currency": "货币",
+        "checking": "查询中…",
+        "error_fetch": "查询出错",
+    },
+    "en": {
+        "topped_up": "Topped Up",
+        "granted": "Granted",
+        "currency": "Currency",
+        "checking": "Checking…",
+        "error_fetch": "Fetch Error",
+    }
+}
+
+def T(key, lang="zh", **kwargs):
+    """Local translation wrapper that falls back to global T."""
+    text = _MAC_T.get(lang, _MAC_T["zh"]).get(key)
+    if text:
+        return text.format(**kwargs) if kwargs else text
+    return _T(key, lang, **kwargs)
 from src.api_client import fetch_balance
 from src.mac.keystore import decrypt_api_key
 

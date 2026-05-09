@@ -12,7 +12,20 @@ src.config.CONFIG_DIR = mac_dir
 src.config.CONFIG_FILE = mac_dir / "config.json"
 src.config.LOG_FILE = mac_dir / "app.log"
 
-from src.config import load_config, save_config, T
+from src.config import load_config, save_config, T as _T
+
+# --- macOS Local Translations ---
+_MAC_T = {
+    "zh": {"currency": "货币"},
+    "en": {"currency": "Currency"}
+}
+
+def T(key, lang="zh", **kwargs):
+    """Local translation wrapper that falls back to global T."""
+    text = _MAC_T.get(lang, _MAC_T["zh"]).get(key)
+    if text:
+        return text.format(**kwargs) if kwargs else text
+    return _T(key, lang, **kwargs)
 from src.mac.keystore import encrypt_api_key, decrypt_api_key
 
 # ─── Eye icon (SVG-style drawn on Canvas) ─────────────────────────────────────
