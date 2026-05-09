@@ -14,11 +14,14 @@ class AppState:
         self.balances = {}
         self.last_check = None
         self.error = None
+        self.service_status = None
         self._timer = None
         self.running = True
         self._lock = threading.Lock()
         self._settings_open = False
         self._settings_window = None
+        self._alert_suppressed = False
+        self._api_was_operational = True
 
     @property
     def lang(self):
@@ -48,6 +51,44 @@ class AppState:
             t = float(self.config.get("threshold_yuan", 1.0))
             return b["total_balance"] < t
 
+    def should_alert(self):
+        """Return True if a low-balance notification should fire this cycle."""
+        with self._lock:
+            mode = self.config.get("alert_mode", "always")
+            if mode == "never":
+                self._alert_suppressed = False
+                return False
+            b = self.get_preferred_balance()
+            if b is None:
+                return False
+            t = float(self.config.get("threshold_yuan", 1.0))
+            low = b["total_balance"] < t
+            if not low:
+                self._alert_suppressed = False
+                return False
+            if mode == "always":
+                return True
+            if self._alert_suppressed:
+                return False
+            self._alert_suppressed = True
+            return True
+
+    def check_api_status_alert(self):
+        """Return "degraded", "recovered", or None on first status change.
+        Fires once per transition — only when the API operational flag flips."""
+        with self._lock:
+            st = self.service_status
+            if st is None:
+                return None
+            now_ok = st.get("api_operational", True)
+            was_ok = self._api_was_operational
+            self._api_was_operational = now_ok
+            if was_ok and not now_ok:
+                return "degraded"
+            if not was_ok and now_ok:
+                return "recovered"
+            return None
+
     def schedule_next_check(self, cb, interval_sec):
         with self._lock:
             if self._timer:
@@ -69,6 +110,10 @@ _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
 def get_auto_start_state():
+    if sys.platform == "darwin":
+        import os
+        plist_path = os.path.expanduser(f"~/Library/LaunchAgents/{APP_ID}.plist")
+        return os.path.exists(plist_path)
     if sys.platform != "win32":
         return False
     try:
@@ -83,6 +128,50 @@ def get_auto_start_state():
 
 
 def set_auto_start(enable):
+    if sys.platform == "darwin":
+        import os
+        plist_dir = os.path.expanduser("~/Library/LaunchAgents")
+        plist_path = os.path.join(plist_dir, f"{APP_ID}.plist")
+        if enable:
+            if not os.path.exists(plist_dir):
+                os.makedirs(plist_dir, exist_ok=True)
+            # Use the .app bundle path if frozen, otherwise use python path
+            if getattr(sys, 'frozen', False):
+                # sys.executable is inside Contents/MacOS/
+                app_path = os.path.abspath(os.path.join(os.path.dirname(sys.executable), "../../.."))
+                args_str = f"        <string>/usr/bin/open</string>\n        <string>-W</string>\n        <string>-n</string>\n        <string>{app_path}</string>"
+            else:
+                args_str = f"        <string>{sys.executable}</string>\n        <string>{os.path.abspath(sys.argv[0])}</string>"
+
+            plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{APP_ID}</string>
+    <key>ProgramArguments</key>
+    <array>
+{args_str}
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>"""
+            try:
+                with open(plist_path, "w") as f:
+                    f.write(plist_content)
+                log(f"Auto-start enabled (macOS): {plist_path}")
+            except Exception as e:
+                log(f"Failed to enable auto-start: {e}")
+        else:
+            if os.path.exists(plist_path):
+                try:
+                    os.remove(plist_path)
+                    log("Auto-start disabled (macOS)")
+                except Exception as e:
+                    log(f"Failed to disable auto-start: {e}")
+        return
+
     if sys.platform != "win32":
         return
     exe_path = sys.executable

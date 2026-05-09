@@ -392,8 +392,15 @@ class DeepSeekBalanceMacApp(rumps.App):
     def on_settings(self, _):
         import subprocess
         # Pass --settings flag to the executable to avoid duplicate tray icons
-        # In bundled app, sys.executable is the app binary itself.
-        subprocess.run([sys.executable, "--settings"])
+        if getattr(sys, 'frozen', False):
+            # In bundled app, sys.executable is the app binary itself.
+            cmd = [sys.executable, "--settings"]
+        else:
+            # In dev mode, we need to pass the script path
+            cmd = [sys.executable, sys.argv[0], "--settings"]
+        
+        log(f"Launching settings: {' '.join(cmd)}")
+        subprocess.Popen(cmd)
         
         # After settings process closes, reload config and refresh
         self.config = load_config()
