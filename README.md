@@ -16,7 +16,7 @@ A Windows system tray application that periodically queries the DeepSeek API for
 - **Low balance notification** — A desktop notification fires when balance drops below your configured threshold. Alerts can be disabled in settings; the icon still turns red regardless.
 - **Balance details** — Left-click the icon (or right-click → View Balance) to see a full breakdown: total, topped-up, and granted balance per currency, plus last check time.
 - **Settings** — API key, check interval (1–1440 min), alert threshold, language (Chinese / English), and auto-start on boot. The Python build opens the settings dialog when no key is configured; the Rust build opens `config.json` and shows a local-storage notice.
-- **Rust Windows build** — `v0.1.0` adds a native Rust tray app with a bundled DeepSeek icon, embedded Windows manifest, Win7/Win8.1 compatibility target, and startup-folder shortcut based auto-start.
+- **Rust Windows build** — `v0.1.1` provides a native Rust tray app with a bundled DeepSeek icon, embedded Windows manifest, Win7/Win8.1 compatibility target, startup-folder shortcut based auto-start, centered tray numbers, and a clearer settings-window font.
 
 #### Notification Previews
 
@@ -75,7 +75,7 @@ rustup toolchain install 1.77.2-x86_64-pc-windows-msvc
 cargo +1.77.2 build --release --target x86_64-pc-windows-msvc --locked
 ```
 
-GitHub Actions publishes the release executable as `deepseek-balance-monitor.exe` on `v0.1.0`.
+GitHub Actions publishes the release executable as `deepseek-balance-monitor.exe` on `v0.1.1`.
 
 ### Python vs Rust Build
 
@@ -164,7 +164,7 @@ MIT
 - **低余额通知** — 余额低于设定阈值时弹出桌面通知。可在设置中关闭通知，关闭后图标仍会变红作为视觉提醒。
 - **余额详情** — 左键单击图标（或右键 → 查看余额）可查看完整明细：每种币种的总余额、充值余额、赠送余额，以及上次查询时间。
 - **设置** — API Key、查询间隔（1–1440 分钟）、预警阈值、语言（中文 / English）、开机自启。Python 版未配置 Key 时会弹出设置窗口；Rust 版会打开 `config.json` 并提示配置仅保存在本机。
-- **Rust Windows 版** — `v0.1.0` 增加原生 Rust 托盘程序，包含 DeepSeek 图标、嵌入式 Windows manifest、Win7/Win8.1 兼容目标，以及基于启动文件夹快捷方式的自启动。
+- **Rust Windows 版** — `v0.1.1` 提供原生 Rust 托盘程序，包含 DeepSeek 图标、嵌入式 Windows manifest、Win7/Win8.1 兼容目标、基于启动文件夹快捷方式的自启动、托盘数字居中修复和更清晰的设置窗口字体。
 
 #### 通知预览
 
@@ -223,7 +223,7 @@ rustup toolchain install 1.77.2-x86_64-pc-windows-msvc
 cargo +1.77.2 build --release --target x86_64-pc-windows-msvc --locked
 ```
 
-GitHub Actions 会在 `v0.1.0` 发布页上传 `deepseek-balance-monitor.exe`。
+GitHub Actions 会在 `v0.1.1` 发布页上传 `deepseek-balance-monitor.exe`。
 
 ### Python 版与 Rust 版对比
 

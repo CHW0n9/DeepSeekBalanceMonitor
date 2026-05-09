@@ -261,6 +261,7 @@ mod windows_app {
 
     pub fn run() -> Result<(), String> {
         nwg::init().map_err(|e| e.to_string())?;
+        set_ui_font();
         let ui = AppUi::build().map_err(|e| e.to_string())?;
         log_line("Rust Windows app started");
         ui.sync_auto_start();
@@ -273,6 +274,14 @@ mod windows_app {
         nwg::dispatch_thread_events();
         log_line("Rust Windows app exited");
         Ok(())
+    }
+
+    fn set_ui_font() {
+        for family in ["Microsoft YaHei UI", "Segoe UI", "Microsoft Sans Serif"] {
+            if nwg::Font::set_global_family(family).is_ok() {
+                return;
+            }
+        }
     }
 
     struct AppUi {
@@ -1134,7 +1143,10 @@ mod windows_app {
         width: i32,
         height: i32,
     ) -> (i32, i32) {
-        let glyphs: Vec<_> = font.layout(text, scale, point(0.0, 0.0)).collect();
+        let v_metrics = font.v_metrics(scale);
+        let glyphs: Vec<_> = font
+            .layout(text, scale, point(0.0, v_metrics.ascent))
+            .collect();
         let mut min_x = 0;
         let mut min_y = 0;
         let mut max_x = 0;
