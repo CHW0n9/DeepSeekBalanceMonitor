@@ -6,6 +6,11 @@
 
 ![preview](preview_zh.png)
 
+**Linux Plasma 小组件预览**
+桌面小组件仅适用于 KDE Plasma 6 桌面环境。
+
+![Linux 预览](preview_linux.png)
+
 ---
 
 ## 功能
