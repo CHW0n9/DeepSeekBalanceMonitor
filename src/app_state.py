@@ -110,6 +110,10 @@ _RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 
 
 def get_auto_start_state():
+    if sys.platform == "darwin":
+        import os
+        plist_path = os.path.expanduser(f"~/Library/LaunchAgents/{APP_ID}.plist")
+        return os.path.exists(plist_path)
     if sys.platform != "win32":
         return False
     try:
@@ -124,6 +128,50 @@ def get_auto_start_state():
 
 
 def set_auto_start(enable):
+    if sys.platform == "darwin":
+        import os
+        plist_dir = os.path.expanduser("~/Library/LaunchAgents")
+        plist_path = os.path.join(plist_dir, f"{APP_ID}.plist")
+        if enable:
+            if not os.path.exists(plist_dir):
+                os.makedirs(plist_dir, exist_ok=True)
+            # Use the .app bundle path if frozen, otherwise use python path
+            if getattr(sys, 'frozen', False):
+                # sys.executable is inside Contents/MacOS/
+                app_path = os.path.abspath(os.path.join(os.path.dirname(sys.executable), "../../.."))
+                args_str = f"        <string>/usr/bin/open</string>\n        <string>-W</string>\n        <string>-n</string>\n        <string>{app_path}</string>"
+            else:
+                args_str = f"        <string>{sys.executable}</string>\n        <string>{os.path.abspath(sys.argv[0])}</string>"
+
+            plist_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{APP_ID}</string>
+    <key>ProgramArguments</key>
+    <array>
+{args_str}
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>"""
+            try:
+                with open(plist_path, "w") as f:
+                    f.write(plist_content)
+                log(f"Auto-start enabled (macOS): {plist_path}")
+            except Exception as e:
+                log(f"Failed to enable auto-start: {e}")
+        else:
+            if os.path.exists(plist_path):
+                try:
+                    os.remove(plist_path)
+                    log("Auto-start disabled (macOS)")
+                except Exception as e:
+                    log(f"Failed to disable auto-start: {e}")
+        return
+
     if sys.platform != "win32":
         return
     exe_path = sys.executable
