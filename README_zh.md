@@ -16,6 +16,7 @@
 - **设置** — API Key、查询间隔、预警阈值、提醒模式、API 状态提醒、语言、开机自启。
 - **Rust Windows 版** — 原生 Rust 构建（`rust-windows/`），支持 Win7/Win8.1，使用启动文件夹快捷方式实现开机自启。
 - **Rust Linux 版** — `dsmon` 命令行守护进程（`rust-linux/`），支持 systemd 用户服务、日志保留和可选 KDE Plasma 6 小组件。
+- **macOS 版** — 社区贡献的 macOS 移植（`src/mac/`）。原生外观，Keychain 加密存储 API Key。
 
 ### 通知预览
 
@@ -43,6 +44,7 @@
 - Python 版：Windows 10+，Python 3.10+
 - Rust Windows 版：安装所有官方更新的 Windows 7 SP1 / Server 2008 R2 SP1、Windows 8.1 / Server 2012 R2、Windows 10 或 Windows 11
 - Rust Linux 版：RHEL 8 / Ubuntu 20.04 同时代或更新 glibc；可选小组件需要 KDE Plasma 6.0+
+- macOS 版：详见 `src/mac/`
 
 ### 源码运行（Python）
 
@@ -87,6 +89,13 @@ cd deepseek-balance-monitor-0.2.0-linux-x86_64
 sudo ./install.sh
 ```
 
+**macOS（`src/mac/`）：**
+
+```bash
+pip install -r requirements.txt pyinstaller
+scripts/build_mac.sh
+```
+
 ### Python 版与 Rust 版对比
 
 | | Python 版 | Rust Windows 版 | Rust Linux 版 |
@@ -106,7 +115,8 @@ DeepSeekBalance/
 │   ├── icon_renderer.py
 │   ├── app_state.py
 │   ├── settings_dialog.py
-│   └── tray_app.py
+│   ├── tray_app.py
+│   └── mac/                  # macOS 移植
 ├── scripts/                   # 构建与工具脚本
 │   ├── build_exe.bat
 │   ├── setup.bat

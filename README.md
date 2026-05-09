@@ -16,6 +16,7 @@ A Windows tray app and Linux CLI/Plasma widget that periodically query the DeepS
 - **Settings** — API key, check interval, alert threshold, alert mode, API status alerts, language, and auto-start on boot.
 - **Rust Windows build** — Native Rust build (`rust-windows/`) with Win7/Win8.1 support, bundled icon, and startup-folder auto-start.
 - **Rust Linux build** — `dsmon` CLI daemon (`rust-linux/`) with systemd user service support, log retention, and an optional KDE Plasma 6 widget.
+- **macOS build** — Community-contributed macOS port (`src/mac/`). Native look-and-feel, Keychain-secured API key storage.
 
 ### Notification Previews
 
@@ -43,6 +44,7 @@ Grab the latest files from [Releases](https://github.com/wenyinos/DeepSeekBalanc
 - Python build: Windows 10+, Python 3.10+
 - Rust Windows build: Windows 7 SP1 / Server 2008 R2 SP1 with all official updates, Windows 8.1 / Server 2012 R2, Windows 10, or Windows 11
 - Rust Linux build: RHEL 8 / Ubuntu 20.04 era glibc or newer; KDE Plasma 6.0+ for the optional widget
+- macOS build: see `src/mac/`
 
 ### Run from Source (Python)
 
@@ -87,6 +89,13 @@ cd deepseek-balance-monitor-0.2.0-linux-x86_64
 sudo ./install.sh
 ```
 
+**macOS (`src/mac/`):**
+
+```bash
+pip install -r requirements.txt pyinstaller
+scripts/build_mac.sh
+```
+
 ### Python vs Rust
 
 | | Python | Rust Windows | Rust Linux |
@@ -106,7 +115,8 @@ DeepSeekBalance/
 │   ├── icon_renderer.py
 │   ├── app_state.py
 │   ├── settings_dialog.py
-│   └── tray_app.py
+│   ├── tray_app.py
+│   └── mac/                  # macOS port
 ├── scripts/                   # Build & utility scripts
 │   ├── build_exe.bat
 │   ├── setup.bat
