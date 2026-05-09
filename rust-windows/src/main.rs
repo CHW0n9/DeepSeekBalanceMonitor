@@ -11,20 +11,159 @@ mod windows_app {
     use serde::{Deserialize, Serialize};
     use std::cell::RefCell;
     use std::collections::BTreeMap;
+    use std::ffi::{c_void, OsStr, OsString};
     use std::fs::{self, File, OpenOptions};
     use std::io::Write;
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
     use std::path::{Path, PathBuf};
+    use std::process::Command;
+    use std::ptr;
     use std::rc::Rc;
     use std::sync::mpsc::{self, Receiver, Sender};
     use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::Duration;
-    use winreg::enums::*;
-    use winreg::RegKey;
 
     const APP_NAME: &str = "DeepSeek Balance Monitor";
-    const APP_ID: &str = "deepseek-balance-monitor";
-    const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+    const STARTUP_LINK_NAME: &str = "DeepSeek Balance Monitor.lnk";
+    const CSIDL_STARTUP: i32 = 0x0007;
+    const CSIDL_FLAG_CREATE: i32 = 0x8000;
+    const COINIT_APARTMENTTHREADED: u32 = 0x2;
+    const CLSCTX_INPROC_SERVER: u32 = 0x1;
+    const RPC_E_CHANGED_MODE: i32 = 0x80010106u32 as i32;
+    const CLSID_SHELL_LINK: Guid = Guid {
+        data1: 0x00021401,
+        data2: 0x0000,
+        data3: 0x0000,
+        data4: [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+    };
+    const IID_ISHELL_LINK_W: Guid = Guid {
+        data1: 0x000214F9,
+        data2: 0x0000,
+        data3: 0x0000,
+        data4: [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+    };
+    const IID_IPERSIST_FILE: Guid = Guid {
+        data1: 0x0000010B,
+        data2: 0x0000,
+        data3: 0x0000,
+        data4: [0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46],
+    };
+
+    #[repr(C)]
+    struct Guid {
+        data1: u32,
+        data2: u16,
+        data3: u16,
+        data4: [u8; 8],
+    }
+
+    #[repr(C)]
+    struct IShellLinkW {
+        lp_vtbl: *const IShellLinkWVtbl,
+    }
+
+    #[repr(C)]
+    struct IShellLinkWVtbl {
+        query_interface:
+            unsafe extern "system" fn(*mut IShellLinkW, *const Guid, *mut *mut c_void) -> i32,
+        add_ref: unsafe extern "system" fn(*mut IShellLinkW) -> u32,
+        release: unsafe extern "system" fn(*mut IShellLinkW) -> u32,
+        get_path:
+            unsafe extern "system" fn(*mut IShellLinkW, *mut u16, i32, *mut c_void, u32) -> i32,
+        get_id_list: unsafe extern "system" fn(*mut IShellLinkW, *mut *mut c_void) -> i32,
+        set_id_list: unsafe extern "system" fn(*mut IShellLinkW, *mut c_void) -> i32,
+        get_description: unsafe extern "system" fn(*mut IShellLinkW, *mut u16, i32) -> i32,
+        set_description: unsafe extern "system" fn(*mut IShellLinkW, *const u16) -> i32,
+        get_working_directory: unsafe extern "system" fn(*mut IShellLinkW, *mut u16, i32) -> i32,
+        set_working_directory: unsafe extern "system" fn(*mut IShellLinkW, *const u16) -> i32,
+        get_arguments: unsafe extern "system" fn(*mut IShellLinkW, *mut u16, i32) -> i32,
+        set_arguments: unsafe extern "system" fn(*mut IShellLinkW, *const u16) -> i32,
+        get_hotkey: unsafe extern "system" fn(*mut IShellLinkW, *mut u16) -> i32,
+        set_hotkey: unsafe extern "system" fn(*mut IShellLinkW, u16) -> i32,
+        get_show_cmd: unsafe extern "system" fn(*mut IShellLinkW, *mut i32) -> i32,
+        set_show_cmd: unsafe extern "system" fn(*mut IShellLinkW, i32) -> i32,
+        get_icon_location:
+            unsafe extern "system" fn(*mut IShellLinkW, *mut u16, i32, *mut i32) -> i32,
+        set_icon_location: unsafe extern "system" fn(*mut IShellLinkW, *const u16, i32) -> i32,
+        set_relative_path: unsafe extern "system" fn(*mut IShellLinkW, *const u16, u32) -> i32,
+        resolve: unsafe extern "system" fn(*mut IShellLinkW, *mut c_void, u32) -> i32,
+        set_path: unsafe extern "system" fn(*mut IShellLinkW, *const u16) -> i32,
+    }
+
+    #[repr(C)]
+    struct IPersistFile {
+        lp_vtbl: *const IPersistFileVtbl,
+    }
+
+    #[repr(C)]
+    struct IPersistFileVtbl {
+        query_interface:
+            unsafe extern "system" fn(*mut IPersistFile, *const Guid, *mut *mut c_void) -> i32,
+        add_ref: unsafe extern "system" fn(*mut IPersistFile) -> u32,
+        release: unsafe extern "system" fn(*mut IPersistFile) -> u32,
+        get_class_id: unsafe extern "system" fn(*mut IPersistFile, *mut Guid) -> i32,
+        is_dirty: unsafe extern "system" fn(*mut IPersistFile) -> i32,
+        load: unsafe extern "system" fn(*mut IPersistFile, *const u16, u32) -> i32,
+        save: unsafe extern "system" fn(*mut IPersistFile, *const u16, i32) -> i32,
+        save_completed: unsafe extern "system" fn(*mut IPersistFile, *const u16) -> i32,
+        get_cur_file: unsafe extern "system" fn(*mut IPersistFile, *mut *mut u16) -> i32,
+    }
+
+    struct ComApartment {
+        uninitialize: bool,
+    }
+
+    impl Drop for ComApartment {
+        fn drop(&mut self) {
+            if self.uninitialize {
+                // SAFETY: This balances a successful CoInitializeEx call in init_com.
+                unsafe { CoUninitialize() };
+            }
+        }
+    }
+
+    struct ShellLinkPtr(*mut IShellLinkW);
+
+    impl Drop for ShellLinkPtr {
+        fn drop(&mut self) {
+            // SAFETY: The pointer owns one COM reference returned by CoCreateInstance.
+            unsafe { ((*(*self.0).lp_vtbl).release)(self.0) };
+        }
+    }
+
+    struct PersistFilePtr(*mut IPersistFile);
+
+    impl Drop for PersistFilePtr {
+        fn drop(&mut self) {
+            // SAFETY: The pointer owns one COM reference returned by QueryInterface.
+            unsafe { ((*(*self.0).lp_vtbl).release)(self.0) };
+        }
+    }
+
+    #[link(name = "ole32")]
+    extern "system" {
+        fn CoInitializeEx(reserved: *mut c_void, coinit: u32) -> i32;
+        fn CoUninitialize();
+        fn CoCreateInstance(
+            class_id: *const Guid,
+            outer: *mut c_void,
+            context: u32,
+            interface_id: *const Guid,
+            instance: *mut *mut c_void,
+        ) -> i32;
+    }
+
+    #[link(name = "shell32")]
+    extern "system" {
+        fn SHGetFolderPathW(
+            hwnd: *mut c_void,
+            csidl: i32,
+            token: *mut c_void,
+            flags: u32,
+            path: *mut u16,
+        ) -> i32;
+    }
 
     #[derive(Clone, Serialize, Deserialize)]
     struct AppConfig {
@@ -36,7 +175,7 @@ mod windows_app {
         threshold_yuan: f64,
         #[serde(default = "default_lang")]
         language: String,
-        #[serde(default)]
+        #[serde(default = "default_auto_start")]
         auto_start: bool,
         #[serde(default = "default_alerts")]
         enable_alerts: bool,
@@ -49,7 +188,7 @@ mod windows_app {
                 interval_minutes: default_interval(),
                 threshold_yuan: default_threshold(),
                 language: default_lang(),
-                auto_start: false,
+                auto_start: default_auto_start(),
                 enable_alerts: true,
             }
         }
@@ -61,6 +200,10 @@ mod windows_app {
 
     fn default_threshold() -> f64 {
         1.0
+    }
+
+    fn default_auto_start() -> bool {
+        true
     }
 
     fn default_lang() -> String {
@@ -120,9 +263,10 @@ mod windows_app {
         nwg::init().map_err(|e| e.to_string())?;
         let ui = AppUi::build().map_err(|e| e.to_string())?;
         log_line("Rust Windows app started");
+        ui.sync_auto_start();
 
         if ui.state.lock().unwrap().config.api_key.trim().is_empty() {
-            ui.show_settings();
+            ui.notify_missing_api_key();
         }
 
         ui.start_check();
@@ -137,6 +281,7 @@ mod windows_app {
         tray_menu: nwg::Menu,
         view_item: nwg::MenuItem,
         check_item: nwg::MenuItem,
+        auto_start_item: nwg::MenuItem,
         settings_item: nwg::MenuItem,
         quit_item: nwg::MenuItem,
         notice: nwg::Notice,
@@ -166,6 +311,7 @@ mod windows_app {
             let mut tray_menu = Default::default();
             let mut view_item = Default::default();
             let mut check_item = Default::default();
+            let mut auto_start_item = Default::default();
             let mut settings_item = Default::default();
             let mut quit_item = Default::default();
             let mut notice = Default::default();
@@ -193,6 +339,11 @@ mod windows_app {
                 .parent(&tray_menu)
                 .build(&mut check_item)?;
             nwg::MenuItem::builder()
+                .text(tr(&config.language, "auto_start"))
+                .check(config.auto_start)
+                .parent(&tray_menu)
+                .build(&mut auto_start_item)?;
+            nwg::MenuItem::builder()
                 .text(tr(&config.language, "settings"))
                 .parent(&tray_menu)
                 .build(&mut settings_item)?;
@@ -213,6 +364,7 @@ mod windows_app {
                 tray_menu,
                 view_item,
                 check_item,
+                auto_start_item,
                 settings_item,
                 quit_item,
                 notice,
@@ -248,6 +400,9 @@ mod windows_app {
                 }
                 nwg::Event::OnMenuItemSelected if &handle == &self.view_item => self.show_balance(),
                 nwg::Event::OnMenuItemSelected if &handle == &self.check_item => self.start_check(),
+                nwg::Event::OnMenuItemSelected if &handle == &self.auto_start_item => {
+                    self.toggle_auto_start()
+                }
                 nwg::Event::OnMenuItemSelected if &handle == &self.settings_item => {
                     self.show_settings()
                 }
@@ -261,6 +416,56 @@ mod windows_app {
         fn show_menu(&self) {
             let (x, y) = nwg::GlobalCursor::position();
             self.tray_menu.popup(x, y);
+        }
+
+        fn notify_missing_api_key(&self) {
+            let (config, title, message) = {
+                let state = self.state.lock().unwrap();
+                let lang = state.config.language.as_str();
+                (
+                    state.config.clone(),
+                    tr(lang, "api_key_missing_title").to_string(),
+                    tr(lang, "api_key_missing_body").to_string(),
+                )
+            };
+            match ensure_config_file(&config) {
+                Ok(true) => {
+                    if let Err(error) = open_config_file() {
+                        log_line(&format!("Failed to open config file: {error}"));
+                    }
+                }
+                Ok(false) => {}
+                Err(error) => log_line(&format!("Failed to create config file: {error}")),
+            }
+            self.tray.show(&message, Some(&title), None, None);
+        }
+
+        fn sync_auto_start(&self) {
+            let enabled = self.state.lock().unwrap().config.auto_start;
+            self.auto_start_item.set_checked(enabled);
+            if let Err(error) = set_auto_start(enabled) {
+                log_line(&format!("Auto-start update failed: {error}"));
+            }
+        }
+
+        fn toggle_auto_start(&self) {
+            let mut config = self.state.lock().unwrap().config.clone();
+            config.auto_start = !config.auto_start;
+            if let Err(error) = save_config(&config) {
+                log_line(&format!("Config save failed: {error}"));
+            }
+            if let Err(error) = set_auto_start(config.auto_start) {
+                log_line(&format!("Auto-start update failed: {error}"));
+            }
+            self.auto_start_item.set_checked(config.auto_start);
+            if let Some(settings) = self.settings.borrow().as_ref() {
+                settings.auto_start.set_check_state(if config.auto_start {
+                    nwg::CheckBoxState::Checked
+                } else {
+                    nwg::CheckBoxState::Unchecked
+                });
+            }
+            self.state.lock().unwrap().config = config;
         }
 
         fn start_check(&self) {
@@ -472,6 +677,7 @@ mod windows_app {
             if let Err(error) = set_auto_start(config.auto_start) {
                 log_line(&format!("Auto-start update failed: {error}"));
             }
+            self.auto_start_item.set_checked(config.auto_start);
             {
                 let mut state = self.state.lock().unwrap();
                 state.config = config.clone();
@@ -607,7 +813,7 @@ mod windows_app {
                 .position((20, 235))
                 .size((220, 24))
                 .parent(&window)
-                .check_state(if config.auto_start || get_auto_start_state() {
+                .check_state(if config.auto_start {
                     checked
                 } else {
                     unchecked
@@ -988,6 +1194,24 @@ mod windows_app {
         Ok(())
     }
 
+    fn ensure_config_file(config: &AppConfig) -> Result<bool, String> {
+        let path = config_file();
+        if path.exists() {
+            return Ok(false);
+        }
+        save_config(config).map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+
+    fn open_config_file() -> Result<(), String> {
+        Command::new("cmd")
+            .args(["/C", "start", ""])
+            .arg(config_file())
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
     fn log_line(message: &str) {
         if ensure_dir(&config_dir()).is_err() {
             return;
@@ -1006,34 +1230,130 @@ mod windows_app {
         }
     }
 
-    fn get_auto_start_state() -> bool {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let Ok(key) = hkcu.open_subkey(RUN_KEY) else {
-            return false;
-        };
-        let Ok(value): Result<String, _> = key.get_value(APP_ID) else {
-            return false;
-        };
-        let Ok(current) = std::env::current_exe() else {
-            return false;
-        };
-        value == current.to_string_lossy()
-    }
-
     fn set_auto_start(enable: bool) -> Result<(), String> {
-        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-        let (key, _) = hkcu.create_subkey(RUN_KEY).map_err(|e| e.to_string())?;
         if enable {
-            let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-            key.set_value(APP_ID, &exe.to_string_lossy().to_string())
-                .map_err(|e| e.to_string())
+            create_startup_shortcut()
         } else {
-            match key.delete_value(APP_ID) {
+            match fs::remove_file(startup_shortcut_path()?) {
                 Ok(()) => Ok(()),
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
                 Err(error) => Err(error.to_string()),
             }
         }
+    }
+
+    fn create_startup_shortcut() -> Result<(), String> {
+        let _com = init_com()?;
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let link_path = startup_shortcut_path()?;
+        if let Some(parent) = link_path.parent() {
+            ensure_dir(parent).map_err(|e| e.to_string())?;
+        }
+
+        let mut raw_link = ptr::null_mut();
+        // SAFETY: CoCreateInstance writes a COM interface pointer for the ShellLink class.
+        let hr = unsafe {
+            CoCreateInstance(
+                &CLSID_SHELL_LINK,
+                ptr::null_mut(),
+                CLSCTX_INPROC_SERVER,
+                &IID_ISHELL_LINK_W,
+                &mut raw_link,
+            )
+        };
+        check_hr(hr, "CoCreateInstance")?;
+        let link = ShellLinkPtr(raw_link as *mut IShellLinkW);
+
+        let exe_w = wide_null(exe.as_os_str());
+        let description_w = wide_null(OsStr::new(APP_NAME));
+        // SAFETY: ShellLink pointer and UTF-16 strings are valid for each call.
+        unsafe {
+            check_hr(
+                ((*(*link.0).lp_vtbl).set_path)(link.0, exe_w.as_ptr()),
+                "SetPath",
+            )?;
+            check_hr(
+                ((*(*link.0).lp_vtbl).set_description)(link.0, description_w.as_ptr()),
+                "SetDescription",
+            )?;
+            check_hr(
+                ((*(*link.0).lp_vtbl).set_icon_location)(link.0, exe_w.as_ptr(), 0),
+                "SetIconLocation",
+            )?;
+            if let Some(parent) = exe.parent() {
+                let work_dir_w = wide_null(parent.as_os_str());
+                check_hr(
+                    ((*(*link.0).lp_vtbl).set_working_directory)(link.0, work_dir_w.as_ptr()),
+                    "SetWorkingDirectory",
+                )?;
+            }
+        }
+
+        let mut raw_persist = ptr::null_mut();
+        // SAFETY: QueryInterface writes an IPersistFile pointer for the same COM object.
+        let hr = unsafe {
+            ((*(*link.0).lp_vtbl).query_interface)(link.0, &IID_IPERSIST_FILE, &mut raw_persist)
+        };
+        check_hr(hr, "QueryInterface(IPersistFile)")?;
+        let persist = PersistFilePtr(raw_persist as *mut IPersistFile);
+        let link_path_w = wide_null(link_path.as_os_str());
+        // SAFETY: IPersistFile pointer is valid and link_path_w is null-terminated.
+        let hr = unsafe { ((*(*persist.0).lp_vtbl).save)(persist.0, link_path_w.as_ptr(), 1) };
+        check_hr(hr, "IPersistFile::Save")
+    }
+
+    fn startup_shortcut_path() -> Result<PathBuf, String> {
+        Ok(startup_folder()?.join(STARTUP_LINK_NAME))
+    }
+
+    fn startup_folder() -> Result<PathBuf, String> {
+        let mut buffer = [0u16; 260];
+        // SAFETY: buffer is a writable MAX_PATH-sized UTF-16 buffer for SHGetFolderPathW.
+        let hr = unsafe {
+            SHGetFolderPathW(
+                ptr::null_mut(),
+                CSIDL_STARTUP | CSIDL_FLAG_CREATE,
+                ptr::null_mut(),
+                0,
+                buffer.as_mut_ptr(),
+            )
+        };
+        check_hr(hr, "SHGetFolderPathW(CSIDL_STARTUP)")?;
+        let len = buffer
+            .iter()
+            .position(|&ch| ch == 0)
+            .unwrap_or(buffer.len());
+        Ok(PathBuf::from(OsString::from_wide(&buffer[..len])))
+    }
+
+    fn init_com() -> Result<ComApartment, String> {
+        // SAFETY: Initializes COM for the current thread before using ShellLink COM APIs.
+        let hr = unsafe { CoInitializeEx(ptr::null_mut(), COINIT_APARTMENTTHREADED) };
+        if hr >= 0 {
+            Ok(ComApartment { uninitialize: true })
+        } else if hr == RPC_E_CHANGED_MODE {
+            Ok(ComApartment {
+                uninitialize: false,
+            })
+        } else {
+            Err(format_hresult("CoInitializeEx", hr))
+        }
+    }
+
+    fn wide_null(text: &OsStr) -> Vec<u16> {
+        text.encode_wide().chain(Some(0)).collect()
+    }
+
+    fn check_hr(hr: i32, context: &str) -> Result<(), String> {
+        if hr >= 0 {
+            Ok(())
+        } else {
+            Err(format_hresult(context, hr))
+        }
+    }
+
+    fn format_hresult(context: &str, hr: i32) -> String {
+        format!("{context} failed with HRESULT 0x{:08X}", hr as u32)
     }
 
     fn path_text(path: &Path) -> String {
@@ -1071,6 +1391,10 @@ mod windows_app {
             ("en", "low_balance_title") => "DeepSeek Low Balance",
             ("en", "low_balance_body") => "Balance is only",
             ("en", "threshold") => "threshold",
+            ("en", "api_key_missing_title") => "DeepSeek API Key required",
+            ("en", "api_key_missing_body") => {
+                "Enter api_key in config.json. It stays on this computer and is not sent to the developer."
+            }
             ("en", "warn_title") => "Warning",
             (_, "checking") => "查询中...",
             (_, "error") => "错误",
@@ -1099,6 +1423,10 @@ mod windows_app {
             (_, "low_balance_title") => "DeepSeek 余额不足",
             (_, "low_balance_body") => "当前余额仅剩",
             (_, "threshold") => "预警线",
+            (_, "api_key_missing_title") => "请输入 DeepSeek API Key",
+            (_, "api_key_missing_body") => {
+                "请在 config.json 填写 api_key。配置仅保存在本机，开发者不会获取。"
+            }
             (_, "warn_title") => "警告",
             _ => "",
         }
