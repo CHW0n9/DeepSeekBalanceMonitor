@@ -91,10 +91,7 @@ sudo ./install.sh
 
 **macOS (`src/mac/`):**
 
-```bash
-pip install -r requirements.txt pyinstaller
-scripts/build_mac.sh
-```
+See `src/mac/` for the community macOS port.
 
 ### Python vs Rust
 
