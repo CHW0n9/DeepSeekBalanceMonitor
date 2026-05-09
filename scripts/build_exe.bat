@@ -37,11 +37,6 @@ echo [*] Stopping running instance (if any)...
 taskkill /f /im DeepSeekBalanceMonitor.exe >nul 2>&1
 echo.
 
-:: Generate icon
-echo [*] Generating app icon...
-python scripts\generate_icon.py
-echo.
-
 :: Build the single-file executable
 echo [*] Building executable (this may take a minute)...
 echo.
@@ -51,9 +46,9 @@ pyinstaller ^
     --windowed ^
     --noconsole ^
     --name "DeepSeekBalanceMonitor" ^
-    --icon app_icon.ico ^
+    --icon app.ico ^
     --paths src ^
-    --add-data "app_icon.ico;." ^
+    --add-data "app.ico;." ^
     --version-file version_info.txt ^
     --clean ^
     main.py

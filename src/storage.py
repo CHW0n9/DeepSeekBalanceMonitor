@@ -61,3 +61,41 @@ def get_balance_history(days: int = 30):
     except Exception as e:
         log(f"Failed to read balance history: {e}")
         return []
+
+
+def prune_old_data(retention_days: int):
+    """Delete balance records and log entries older than retention_days.
+    Called once on startup."""
+    try:
+        conn = _connect()
+        conn.execute(
+            "DELETE FROM balance_history "
+            "WHERE timestamp < datetime('now', ?)",
+            (f"-{retention_days} days",),
+        )
+        conn.commit()
+        conn.execute("VACUUM")
+        conn.close()
+        log(f"Pruned balance history older than {retention_days} days")
+    except Exception as e:
+        log(f"Failed to prune balance history: {e}")
+
+    try:
+        from src.config import LOG_FILE
+        if not LOG_FILE.exists():
+            return
+        cutoff = datetime.now().timestamp() - retention_days * 86400
+        lines = LOG_FILE.read_text(encoding="utf-8").splitlines()
+        kept = []
+        for line in lines:
+            try:
+                ts_str = line[1:20]  # "[YYYY-MM-DD HH:MM:SS]"
+                ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").timestamp()
+                if ts >= cutoff:
+                    kept.append(line)
+            except (ValueError, IndexError):
+                kept.append(line)
+        LOG_FILE.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        log(f"Pruned log entries older than {retention_days} days")
+    except Exception as e:
+        log(f"Failed to prune log file: {e}")

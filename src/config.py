@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
     "language": "zh",
     "alert_mode": "once",    # "never" | "always" | "once"
     "api_alert_enabled": True,
+    "retention_days": 30,
     "auto_start": False,
 }
 
@@ -87,6 +88,7 @@ _T = {
         "status_maintenance": "维护中",
         "status_unknown":     "服务状态未知",
         "service_status":     "DeepSeek API 服务状态：",
+        "retention_label":    "日志和记录保留天数：",
         "api_alert_label":    "API 服务状态变化提醒",
         "auto_start_label": "开机自动启动",
         "alert_mode_label": "低余额提醒：",
@@ -138,6 +140,7 @@ _T = {
         "status_maintenance": "Under Maintenance",
         "status_unknown":     "Status Unknown",
         "service_status":     "DeepSeek API Status:",
+        "retention_label":    "Log & record retention (days):",
         "api_alert_label":    "API service status alerts",
         "auto_start_label": "Auto-start on boot",
         "alert_mode_label": "Low Balance Alert:",

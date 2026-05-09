@@ -12,7 +12,7 @@ from src.config import T, log, CONFIG_DIR, APP_NAME, APP_ID
 from src.api_client import fetch_balance, fetch_service_status
 from src.icon_renderer import create_icon_image
 from src.app_state import AppState
-from src.storage import save_balance_record
+from src.storage import save_balance_record, prune_old_data
 
 
 # pystray on Windows uses Shell_NotifyIconA whose NOTIFYICONDATA.szTip / szInfo
@@ -243,6 +243,8 @@ def main():
     log(f"{APP_NAME} starting")
 
     app = AppState()
+    retention = int(app.config.get("retention_days", 30))
+    prune_old_data(retention)
 
     # First run -- force settings if no API key
     if not app.config.get("api_key", "").strip():

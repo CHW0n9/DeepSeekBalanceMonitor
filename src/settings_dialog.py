@@ -39,10 +39,10 @@ def open_settings(app):
 
         try:
             if getattr(sys, "frozen", False):
-                icon_path = os.path.join(sys._MEIPASS, "app_icon.ico")
+                icon_path = os.path.join(sys._MEIPASS, "app.ico")
             else:
                 icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                                         "app_icon.ico")
+                                         "app.ico")
             if os.path.isfile(icon_path):
                 root.iconbitmap(icon_path)
         except Exception:
@@ -177,17 +177,24 @@ def open_settings(app):
                                   state="readonly", width=14)
         lang_combo.pack(anchor="w", pady=(0, 12))
 
-        # Prevent accidental value changes via mousewheel on spinboxes and
-        # comboboxes — these are too easy to bump while scrolling the dialog.
-        _no_scroll = lambda e: "break"
-        for w in (interval_sb, threshold_sb, alert_mode_combo, lang_combo):
-            w.bind("<MouseWheel>", _no_scroll)
-
         from src.app_state import get_auto_start_state, set_auto_start
         auto_start_var = tk.BooleanVar(
             value=app.config.get("auto_start", False) or get_auto_start_state())
         ttk.Checkbutton(scroll_frame, text=T("auto_start_label", lang),
                         variable=auto_start_var).pack(anchor="w", pady=(0, 2))
+
+        ttk.Label(scroll_frame, text=T("retention_label", lang)).pack(anchor="w")
+        retention_var = tk.IntVar(value=app.config.get("retention_days", 30))
+        rfr = ttk.Frame(scroll_frame)
+        rfr.pack(fill="x", pady=(0, 8))
+        retention_sb = ttk.Spinbox(rfr, from_=1, to=3650, textvariable=retention_var, width=8)
+        retention_sb.pack(side="left")
+
+        # Prevent accidental value changes via mousewheel on spinboxes and
+        # comboboxes — these are too easy to bump while scrolling the dialog.
+        _no_scroll = lambda e: "break"
+        for w in (interval_sb, threshold_sb, alert_mode_combo, lang_combo, retention_sb):
+            w.bind("<MouseWheel>", _no_scroll)
 
         ttk.Separator(scroll_frame, orient="horizontal").pack(fill="x", pady=(12, 8))
         ttk.Label(scroll_frame, text="V1.0.1_260508",
@@ -233,13 +240,37 @@ def open_settings(app):
                 messagebox.showwarning(T("warn_title", lang), T("warn_no_key", lang),
                                        parent=root)
                 return
+
+            try:
+                interval = int(interval_var.get())
+                threshold = float(threshold_var.get())
+                retention = int(retention_var.get())
+            except (ValueError, tk.TclError):
+                messagebox.showwarning(T("warn_title", lang),
+                                       "输入值不合法，请检查各字段。", parent=root)
+                return
+
+            if not (1 <= interval <= 1440):
+                messagebox.showwarning(T("warn_title", lang),
+                                       "查询间隔需在 1 ~ 1440 分钟之间。", parent=root)
+                return
+            if not (0 <= threshold <= 10000):
+                messagebox.showwarning(T("warn_title", lang),
+                                       "预警阈值需在 0 ~ 10000 之间。", parent=root)
+                return
+            if not (1 <= retention <= 3650):
+                messagebox.showwarning(T("warn_title", lang),
+                                       "保留天数需在 1 ~ 3650 之间。", parent=root)
+                return
+
             app.config["api_key"] = key
-            app.config["interval_minutes"] = interval_var.get()
-            app.config["threshold_yuan"] = threshold_var.get()
+            app.config["interval_minutes"] = interval
+            app.config["threshold_yuan"] = threshold
             app.config["language"] = LANG_OPTIONS.get(lang_var.get(), "zh")
             app.config["auto_start"] = auto_start_var.get()
             app.config["alert_mode"] = alert_mode_map.get(alert_mode_var.get(), "always")
             app.config["api_alert_enabled"] = api_alert_var.get()
+            app.config["retention_days"] = retention
             set_auto_start(app.config["auto_start"])
             save_config(app.config)
             app.cancel_timer()
