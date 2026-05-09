@@ -15,6 +15,7 @@ A Windows system tray application that periodically queries the DeepSeek API for
 - **Balance details** — Left-click the icon to see balance, API service status, and last check time.
 - **Settings** — API key, check interval, alert threshold, alert mode, API status alerts, language, and auto-start on boot.
 - **Rust Windows build** — Community-contributed native Rust build (`rust-windows/`). Smaller binary, Win7/Win8.1 support, startup-folder auto-start.
+- **macOS build** — Community-contributed macOS port (`src/mac/`). Native look-and-feel, Keychain-secured API key storage.
 
 ### Notification Previews
 
@@ -41,6 +42,7 @@ Grab the latest executable from [Releases](https://github.com/SrtaEstrella/DeepS
 
 - Python build: Windows 10+, Python 3.10+
 - Rust build: Windows 7 SP1+, 8.1, 10, or 11
+- macOS build: see `src/mac/`
 
 ### Run from Source (Python)
 

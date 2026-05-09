@@ -15,6 +15,7 @@
 - **余额详情** — 左键单击图标查看余额明细、API 服务状态和上次查询时间。
 - **设置** — API Key、查询间隔、预警阈值、提醒模式、API 状态提醒、语言、开机自启。
 - **Rust Windows 版** — 社区贡献的原生 Rust 构建（`rust-windows/`）。体积更小，支持 Win7/Win8.1。
+- **macOS 版** — 社区贡献的 macOS 移植（`src/mac/`）。原生外观，Keychain 加密存储 API Key。
 
 ### 通知预览
 
@@ -41,6 +42,7 @@
 
 - Python 版：Windows 10+，Python 3.10+
 - Rust 版：Windows 7 SP1+、8.1、10 或 11
+- macOS 版：详见 `src/mac/`
 
 ### 源码运行（Python）
 
