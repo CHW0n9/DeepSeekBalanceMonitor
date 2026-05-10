@@ -42,11 +42,20 @@ jobs:
       - name: Build release executable
         run: cargo +1.77.2 build --release --target x86_64-pc-windows-msvc --locked
 
+      - name: Create versioned executable
+        run: |
+          $version = "${env:GITHUB_REF_NAME}"
+          if ($version.StartsWith("rust-v")) {
+            $version = $version.Substring(6)
+          }
+          $asset = "target/x86_64-pc-windows-msvc/release/deepseek-balance-monitor-${version}-windows-x86_64.exe"
+          Copy-Item "target/x86_64-pc-windows-msvc/release/deepseek-balance-monitor.exe" $asset
+
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: deepseek-balance-monitor-windows
-          path: rust-windows/target/x86_64-pc-windows-msvc/release/deepseek-balance-monitor.exe
+          name: deepseek-balance-monitor-windows-x86_64
+          path: rust-windows/target/x86_64-pc-windows-msvc/release/deepseek-balance-monitor-*-windows-x86_64.exe
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/')
@@ -54,10 +63,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = "${env:GITHUB_REF_NAME}"
-          $asset = "target/x86_64-pc-windows-msvc/release/deepseek-balance-monitor.exe"
+          $version = $tag.Substring(6)
+          $asset = "target/x86_64-pc-windows-msvc/release/deepseek-balance-monitor-${version}-windows-x86_64.exe"
           gh release view $tag --repo "${env:GITHUB_REPOSITORY}" *> $null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $asset --clobber --repo "${env:GITHUB_REPOSITORY}"
           } else {
-            gh release create $tag $asset --title "Rust Windows $tag" --notes "Rust Windows native build." --repo "${env:GITHUB_REPOSITORY}"
+            gh release create $tag $asset --title $tag --notes "Rust Windows native build." --repo "${env:GITHUB_REPOSITORY}"
           }
