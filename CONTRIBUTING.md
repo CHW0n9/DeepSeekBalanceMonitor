@@ -23,10 +23,11 @@
 点击图标查看余额的通知卡片格式（标题 + 多行正文）：
 
 ```
-DeepSeek 余额：                    ← 固定标题
-12.34 CNY（充值 10.00，赠送 2.34） ← 有余额时显示此行
-上次查询: 2026-05-08 14:30:00      ← 正常 / 查询出错: xxx / 尚未查询
-DeepSeek API 服务状态：🟢 服务正常   ← 常驻
+DeepSeek 余额：                         ← 固定标题
+12.34 CNY（充值 10.00，赠送 2.34）      ← 有余额时显示此行
+日均消耗 1.50 CNY  |  预计可用 28 天 4 小时 ← 有足够历史数据时显示
+上次查询: 2026-05-08 14:30:00           ← 正常 / 查询出错: xxx / 尚未查询
+DeepSeek API 服务状态：🟢 服务正常        ← 常驻
 ```
 
 ## API Endpoints
@@ -85,6 +86,33 @@ DeepSeek API 服务状态：🟢 服务正常   ← 常驻
 | `bal_line` | {balance} {code}（充值 {topped}，赠送 {granted}） | {balance} {code} (Topped {topped}, Granted {granted}) |
 | `retention_label` | 日志和记录保留天数： | Log & record retention (days): |
 | `dev_tools` | 🛠 开发者 | 🛠 Dev Tools |
+| `history` | 📊 历史记录 | 📊 History |
+| `icon_stroke_label` | 图标描边 | Icon stroke |
+| `theme_label` | 图标主题： | Icon Theme: |
+| `theme_default` | 默认 | Default |
+| `theme_contrast` | 高对比 | High Contrast |
+| `theme_bright` | 明亮 | Bright |
+| `theme_dark_mode` | 暗色模式 | Dark Mode |
+| `theme_mono` | 纯灰度 | Monochrome |
+| `theme_custom` | 自定义 | Custom |
+
+## Changed Since v1.1
+
+### Config
+
+- **新增** `theme: string`，默认 `"default"`。可选 `"contrast"` / `"bright"` / `"dark_mode"` / `"mono"` / `"custom"`
+- **新增** `icon_colors: object`，仅在 `theme: "custom"` 时生效，含 `ok`/`low`/`degraded`/`nodata` 四个 6 位 hex 值
+- **新增** `icon_stroke: bool`，默认 `false`。描边颜色随文字自适应（白底黑字 vs 黑底白字）
+- `auto_start` 默认值改为 `false`（原 Rust 版为 `true`，统一为 `false`）
+
+### Behaviour
+
+- **自定义图标配色**：5 套预置主题 + custom 模式，`_get_colors(config)` 统一读取。托盘文字和描边颜色基于背景亮度自选黑白（阈值 170）
+- **Windows 凭据管理器**：`load_config()` 在加载文件后尝试 `read_credential()`，无 config.json 时也尝试。`on_save` 同步写入
+- **Demo 模式**：`--demo` 启动，`app.demo_mode = True`，`do_balance_check` 使用预设数据。右键菜单新增「🛠 开发者」面板
+- **历史记录页**：右键新增「📊 历史记录」，Treeview 分页表格 + Canvas 折线图 + 消耗速率标签。数据从 `get_history_page(limit, offset)` 和 `get_consumption_rate()` 获取
+- **消耗速率**：`get_consumption_rate()` 从 topped 余额计算非递增子区间的平均日消耗和预估剩余天数/小时。余额通知和历史页同步显示
+- **API 服务状态入数据库**：`balance_history` 表新增 `service_status` 列，`save_balance_record` 同步写入
 
 ### Removed i18n Keys
 
