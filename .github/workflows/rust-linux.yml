@@ -5,7 +5,7 @@ on:
     branches:
       - "rust-linux"
     tags:
-      - "v*"
+      - "rust-v*"
     paths:
       - "rust-linux/**"
       - ".github/workflows/rust-linux.yml"
@@ -56,7 +56,7 @@ jobs:
       - name: Create tarball
         working-directory: rust-linux
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="${GITHUB_REF_NAME#rust-v}"
           package="deepseek-balance-monitor-${version}-linux-x86_64"
           mkdir -p "target/package/${package}"
           cp target/release/dsmon "target/package/${package}/"
