@@ -93,19 +93,36 @@ def get_history_page(limit: int = 100, offset: int = 0):
         return []
 
 
-def get_consumption_rate(days=7):
-    """Calculate average daily consumption from topped-up balance.
+def get_consumption_rate(hours=24):
+    """Calculate average daily consumption from total balance.
     Finds all non-increasing sub-intervals, computes per-interval rate,
     averages them, and returns (daily_rate, hours_remaining) or None.
     Assumes one currency — first seen currency wins."""
     try:
         conn = _connect()
+        # Pick currency: prefer one with most recent non-zero balance
+        cur = conn.execute("""
+            SELECT currency FROM balance_history 
+            GROUP BY currency 
+            ORDER BY MAX(timestamp) DESC, MAX(total) DESC 
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return None
+        target_currency = row[0]
+
+        # Use Python's datetime to handle local timezone correctly
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+
         cur = conn.execute(
-            "SELECT timestamp, currency, topped "
+            "SELECT timestamp, currency, total "
             "FROM balance_history "
-            "WHERE timestamp >= datetime('now', ?) "
+            "WHERE timestamp >= ? AND currency = ? "
             "ORDER BY timestamp ASC",
-            (f"-{days} days",),
+            (cutoff, target_currency),
         )
         rows = cur.fetchall()
         conn.close()
@@ -129,7 +146,8 @@ def get_consumption_rate(days=7):
         # Last interval
         intervals.append((start_val, start_ts, prev_val, rows[-1][0]))
 
-        rates = []
+        total_consumed = 0.0
+        total_hours = 0.0
         for sv, st, ev, et in intervals:
             if ev >= sv:
                 continue
@@ -139,19 +157,16 @@ def get_consumption_rate(days=7):
                 delta_h = (t2 - t1).total_seconds() / 3600
                 if delta_h < 0.1:
                     continue
-                rate_24h = (sv - ev) / delta_h * 24
-                rates.append(rate_24h)
+                total_consumed += (sv - ev)
+                total_hours += delta_h
             except ValueError:
                 continue
 
-        if not rates:
+        if total_hours < 0.1 or total_consumed <= 0:
             return None
 
-        daily_rate = sum(rates) / len(rates)
-        if daily_rate <= 0:
-            return None
-
-        remaining = rows[-1][2]  # current topped balance
+        daily_rate = (total_consumed / total_hours) * 24
+        remaining = rows[-1][2]  # current total balance
         hours_left = remaining / daily_rate * 24
         return daily_rate, hours_left, currency
     except Exception as e:
