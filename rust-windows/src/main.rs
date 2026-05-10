@@ -612,12 +612,17 @@ mod windows_app {
                         {
                             let mut state = self.state.lock().unwrap();
                             state.checking = false;
+                            let previous_service_status = state.service_status.clone();
                             let api_changed = state.service_status_checked
-                                && state.service_status != result.service_status;
-                            state.service_status = result.service_status;
-                            if api_changed && state.config.api_alert_enabled {
-                                should_notify_api = Some(service_degraded(&state.service_status));
+                                && previous_service_status != result.service_status;
+                            if api_changed
+                                && state.config.api_alert_enabled
+                                && previous_service_status != "unknown"
+                                && result.service_status != "unknown"
+                            {
+                                should_notify_api = Some(service_degraded(&result.service_status));
                             }
+                            state.service_status = result.service_status;
                             state.service_status_checked = true;
                             match result.balance {
                                 Ok(balances) => {
@@ -1391,50 +1396,68 @@ mod windows_app {
     }
 
     fn fetch_service_status() -> String {
-        let Ok(client) = reqwest::blocking::Client::builder()
+        let client = match reqwest::blocking::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
-        else {
-            return "unknown".to_string();
-        };
-        let mut status = fetch_overall_status(&client).unwrap_or("unknown");
-        if let Some(api_status) = fetch_api_component_status(&client) {
-            if status_rank(api_status) > status_rank(status) {
-                status = api_status;
+        {
+            Ok(client) => client,
+            Err(error) => {
+                log_line(&format!("API status client failed: {error}"));
+                return "unknown".to_string();
             }
+        };
+        let mut status = match fetch_overall_status(&client) {
+            Ok(status) => status,
+            Err(error) => {
+                log_line(&format!("API status overall check failed: {error}"));
+                "unknown"
+            }
+        };
+        match fetch_api_component_status(&client) {
+            Ok(Some(api_status)) => {
+                if status == "unknown" || status_rank(api_status) > status_rank(status) {
+                    status = api_status;
+                }
+            }
+            Ok(None) => {}
+            Err(error) => log_line(&format!("API status component check failed: {error}")),
         }
         status.to_string()
     }
 
-    fn fetch_overall_status(client: &reqwest::blocking::Client) -> Option<&'static str> {
-        let payload: StatusPayload = client
+    fn fetch_overall_status(client: &reqwest::blocking::Client) -> Result<&'static str, String> {
+        let response = client
             .get("https://status.deepseek.com/api/v2/status.json")
             .header("Accept", "application/json")
             .send()
-            .ok()?
+            .map_err(|e| format!("request failed: {e}"))?;
+        let payload: StatusPayload = response
             .error_for_status()
-            .ok()?
+            .map_err(|e| format!("HTTP status failed: {e}"))?
             .json()
-            .ok()?;
-        Some(normalize_service_status(&payload.status.indicator))
+            .map_err(|e| format!("JSON parse failed: {e}"))?;
+        Ok(normalize_service_status(&payload.status.indicator))
     }
 
-    fn fetch_api_component_status(client: &reqwest::blocking::Client) -> Option<&'static str> {
-        let payload: ComponentsPayload = client
+    fn fetch_api_component_status(
+        client: &reqwest::blocking::Client,
+    ) -> Result<Option<&'static str>, String> {
+        let response = client
             .get("https://status.deepseek.com/api/v2/components.json")
             .header("Accept", "application/json")
             .send()
-            .ok()?
+            .map_err(|e| format!("request failed: {e}"))?;
+        let payload: ComponentsPayload = response
             .error_for_status()
-            .ok()?
+            .map_err(|e| format!("HTTP status failed: {e}"))?
             .json()
-            .ok()?;
-        payload
+            .map_err(|e| format!("JSON parse failed: {e}"))?;
+        Ok(payload
             .components
             .into_iter()
             .filter(|item| item.name.to_ascii_lowercase().contains("api"))
             .map(|item| normalize_service_status(&item.status))
-            .max_by_key(|status| status_rank(status))
+            .max_by_key(|status| status_rank(status)))
     }
 
     fn parse_amount(value: &str) -> f64 {
@@ -1470,17 +1493,16 @@ mod windows_app {
 
     fn status_rank(status: &str) -> u8 {
         match status {
-            "none" => 0,
             "maintenance" => 1,
             "minor" => 2,
             "major" => 3,
             "critical" => 4,
-            _ => 5,
+            _ => 0,
         }
     }
 
     fn service_degraded(status: &str) -> bool {
-        status != "none"
+        matches!(status, "maintenance" | "minor" | "major" | "critical")
     }
 
     fn service_status_text(lang: &str, status: &str) -> &'static str {
